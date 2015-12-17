@@ -1,0 +1,63 @@
+= Technologie nosql - egzamin
+Aleksander Bolt <aleksanderbolt@yahoo.com>
+:icons: font
+
+Użyty został następujący sprzęt i technologie
+
+:===
+Procesor,Intel(R) Core(TM) i5-2430M CPU @ 2.40GHz
+Pamięc RAM, 8GB
+Dysk, SSD
+System operacyjny, Linux 3.13.0-24-generic Mint 17 Qiana
+MongoDB, 3.0.7
+Python, 2.7.7
+:===
+
+Poddałem analizie zbiór http://files.grouplens.org/datasets/movielens/ml-latest.zip[ocen filmów] liczący 1500000 rekordów.
+
+== Przetwarzane wstępne i import
+
+Po ściągnięciu i rozpakowaniu pliku zip z podanej strony, przetwarzamy najpierw dane, aby móc je zaimportować do bazy Mongo. Interesujące nas pliki movies.csv i ratings.csv łączymy w jeden plik poleceniem 
+
+csvjoin -c movieId movies.csv ratings.csv > joined.csv
+
+Tak powstały plik liczy sobie ponad 21 milinów ocen. Wybieramy z niego do dalszych obliczeń 1500000 ocen poleceniami
+
+echo "movieId,title,genres,userId,mId,rating,timestamp" > random.csv
+shuf -n 1500000 joined.csv >> random.csv
+
+Niestety w tytułach filmów często znajdują się przecinki lub podwójne apostrofy, stąd pozbywamy się ich używając skryptu.
+
+Importujemy do MongoDB pobrany plik subreddit.bson, poleceniem:
+
+time mongorestore -d nosql -c subreddit subreddit.bson
+
+<img src="https://github.com/alexandder/nosql-zal/images/mongoStart.jpg" />
+
+
+
+<img src="https://github.com/alexandder/nosql-zal/images/mongoEnd.jpg" />
+
+Czas importu wynosi 3 minuty i 13 sekund.
+
+W celu zaimportowania danych do bazy PostgreSQL, tworzymy najpierw tabelę:
+CREATE TABLE subreddits(
+	id serial primary key,
+	data json
+);
+
+Do importu wykorzystamy biblotekę psycopg2 oraz <a href="">skrypt</a>. W jego wyniku otrzymamy
+
+<img src="https://github.com/alexandder/nosql-zal/images/postgresInsert.jpg" />
+
+Czas importu wynosi 6 minut i 17 sekund
+
+== Zliczanie rekordów
+
+W obu bazach zliczamy rekordy:
+
+<img src="https://github.com/alexandder/nosql-zal/images/mongoCount.jpg" />
+
+<img src="https://github.com/alexandder/nosql-zal/images/postgresCount.jpg" />
+
+Zatem w obu przypadkach zaimportowaliśmy 904490 rekordów.
