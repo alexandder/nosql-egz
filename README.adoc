@@ -16,7 +16,7 @@ PyMongo, 3.1.1
 http://csvkit.readthedocs.org/en/0.9.1/scripts/csvjoin.html[csvjoin], 0.9.1
 |===
 
-Poddałem analizie zbiór http://files.grouplens.org/datasets/movielens/ml-latest.zip[ocen filmów] liczący 1500000 rekordów.
+Poddałem analizie zbiór http://files.grouplens.org/datasets/movielens/ml-latest.zip[ocen filmów] pochodzący z projektu MovieLens liczący 1500000 rekordów.
 
 == Przetwarzane wstępne i import
 
