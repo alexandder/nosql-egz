@@ -19,45 +19,248 @@ Poddałem analizie zbiór http://files.grouplens.org/datasets/movielens/ml-lates
 
 Po ściągnięciu i rozpakowaniu pliku zip z podanej strony, przetwarzamy najpierw dane, aby móc je zaimportować do bazy Mongo. Interesujące nas pliki movies.csv i ratings.csv łączymy w jeden plik poleceniem 
 
+[source]
 csvjoin -c movieId movies.csv ratings.csv > joined.csv
 
 Tak powstały plik liczy sobie ponad 21 milinów ocen. Wybieramy z niego do dalszych obliczeń 1500000 ocen poleceniami
 
+[source]
 echo "movieId,title,genres,userId,mId,rating,timestamp" > random.csv
 shuf -n 1500000 joined.csv >> random.csv
 
-Niestety w tytułach filmów często znajdują się przecinki lub podwójne apostrofy, stąd pozbywamy się ich używając skryptu.
+Niestety w tytułach filmów często znajdują się przecinki lub podwójne apostrofy, stąd pozbywamy się ich używając komend ze https://github.com/alexandder/nosql-egz/blob/master/scripts/cleanAndImport.sh[skryptu].
 
 Importujemy do MongoDB pobrany plik subreddit.bson, poleceniem:
 
-time mongorestore -d nosql -c subreddit subreddit.bson
+[source]
+time mongoimport -d nosql -c movies --type csv --file random.csv --headerline
 
-<img src="https://github.com/alexandder/nosql-zal/images/mongoStart.jpg" />
+image::https://github.com/alexandder/nosql-egz/images/importStart.png[]
 
 
+image::https://github.com/alexandder/nosql-egz/images/importEnd.png[]
 
-<img src="https://github.com/alexandder/nosql-zal/images/mongoEnd.jpg" />
+Czas importu wynosi 58,78 sekund.
 
-Czas importu wynosi 3 minuty i 13 sekund.
+Zanim przeprowadzimy obliczenia na zaimportowanych danych, przetransformujemy je. Większość rekordów posiada tutuł w postaci np. "Rain Man (1988)", zatem w transformacji rozbijemy tytuł na właściwy tytuł oraz rok wydania filmu. Podobnie gatunki danego filmu są w postaci np. "Children|Comedy|Fantasy", dlatego w celu łatwiejszego przetwarzania rozbijemy je na tablicę napisów ["Children", "Comedy", "Fantasy"].
+Służy do tego skrypt
 
-W celu zaimportowania danych do bazy PostgreSQL, tworzymy najpierw tabelę:
-CREATE TABLE subreddits(
-	id serial primary key,
-	data json
-);
+[source]
+db.movies.find().snapshot().forEach( function (element) {
+	element.genres = element.genres.split('|');
+	var titleYear = element.title;
+	if (titleYear.charAt(titleYear.length - 1) === ')') {
+		element.title = titleYear.substring(0, titleYear.length - 7);
+		element.year = titleYear.substring(titleYear.length - 5, titleYear.length - 1);
+	}
+	db.tMovies.save(element);
+});
 
-Do importu wykorzystamy biblotekę psycopg2 oraz <a href="">skrypt</a>. W jego wyniku otrzymamy
+Ostatecznie przykładowy rekord w bazie Mongo ma postać:
 
-<img src="https://github.com/alexandder/nosql-zal/images/postgresInsert.jpg" />
+[source]
+{
+	"_id" : ObjectId("567326f93bed1808746f5d10"),
+	"movieId" : 33794,
+	"title" : "Batman Begins",
+	"genres" : [
+		"Action",
+		"Crime",
+		"IMAX"
+	],
+	"userId" : 179316,
+	"mId" : 33794,
+	"rating" : 2.5,
+	"timestamp" : 1212108389,
+	"year" : "2005"
+}
 
-Czas importu wynosi 6 minut i 17 sekund
 
-== Zliczanie rekordów
+== Agregacje
 
-W obu bazach zliczamy rekordy:
+Najpierw odpowiemy na podstawowe pytanie, jakie filmy mają najlepszą średnią ocen. Ponieważ w zaimportowanych danych istenieją filmy z jedną badź kilkoma ocenami, będziemy obliczali średnią tylko dla filmów z conajmniej 1000 ocen. Realizuje to skrypt;
 
-<img src="https://github.com/alexandder/nosql-zal/images/mongoCount.jpg" />
+[source]
+db.tMovies.aggregate([
+  { $group: {_id: "$title", averageRating: {$avg: "$rating"}, numberOfRatings: {$sum : 1}} },
+  { $match : { numberOfRatings : {$gte : 1000} }},
+  { $sort : {averageRating : -1}},
+  { $limit : 5}
+]).pretty()
 
-<img src="https://github.com/alexandder/nosql-zal/images/postgresCount.jpg" />
+W wyniku jego otrzymujemy odpowiedź
+|===
+|Tytuł |Średnia ocen | Liczba ocen 
 
-Zatem w obu przypadkach zaimportowaliśmy 904490 rekordów.
+|Shawshank Redemption The
+|4.356
+|4934
+
+|Usual Suspects The
+|4.341
+|3383
+
+|Godfather The
+|4.334
+|3103
+
+|Schindler's List
+|4.314
+|3913
+
+|Rear Window
+|4.31
+|1237
+|===
+
+image::https://github.com/alexandder/nosql-egz/images/aggr1.png[]
+
+Na to samo pytanie możemy odpowiedzieć używając języka Python i biblioteki PyMongo:
+
+[source]
+import pymongo
+from pymongo import MongoClient
+
+connection = MongoClient('localhost', 27017)
+
+db = connection.nosql
+
+bestRatings = db.tMovies.aggregate([
+  { "$group": {"_id": "$title", "averageRating": {"$avg": "$rating"}, "numberOfRatings": {"$sum" : 1}} },
+  { "$match" : { "numberOfRatings" : {"$gte" : 1000} }},
+  { "$sort" : {"averageRating" : -1}},
+  { "$limit" : 5}
+])
+
+for r in list(bestRatings):
+    print(r)
+
+image::https://github.com/alexandder/nosql-egz/images/aggr1py.png[]
+
+Następnym pytaniem na które odpowiemy to filmy z jakiego gatunku były najrzadziej oceniane. Dodatkowo w szukaniu uwzgędnimy tylko filmy wydane w latach 2000-2002. Realizuje to zapytanie
+
+[source]
+db.tMovies.aggregate([
+  { $match : { year : {$in : ["2000", "2001", "2002"]}}},
+  { $unwind : "$genres"},
+  { $group: {_id: "$genres", number: {$sum : 1}} },
+  { $sort : {number : 1}},
+  { $limit : 5}
+]).pretty()
+
+lub https://github.com/alexandder/nosql-egz/blob/master/aggregations/aggregation2.py[skrypt] w języku Python.
+
+W wyniku jego otrzymujemy
+
+|===
+|Gatunek | Liczba ocen 
+
+|Brak wskaznego gatunku
+|3
+
+|Film-Noir
+|649
+
+|Western
+|783
+
+|IMAX
+|1303
+
+|Documentary
+|2606
+|===
+
+image::https://github.com/alexandder/nosql-egz/images/aggr2.png[]
+
+image::https://github.com/alexandder/nosql-egz/images/aggr2py.png[]
+
+Następnie zapytamy, który gatunek filmowy posiada najniższą średnią ocen, spośród tych, które mają conajmniej 10000 ocen.
+Realizuje to skrypt w Pythonie:
+
+[source]
+import pymongo
+from pymongo import MongoClient
+
+connection = MongoClient('localhost', 27017)
+
+db = connection.nosql
+
+averageRatings = db.tMovies.aggregate([
+  { "$unwind" : "$genres"},
+  { "$group": {"_id": "$genres", "averageRating": {"$avg": "$rating"}, "numberOfRatings": {"$sum" : 1}}},
+  { "$match" : { "numberOfRatings" : {"$gte" : 10000} }},
+  { "$sort" : {"averageRating" : 1}},
+  { "$limit" : 3}
+])
+
+
+for r in list(averageRatings):
+    print(r)
+
+lub https://github.com/alexandder/nosql-egz/blob/master/aggregations/aggregation3.js[skrypt].
+
+W wyniku jego otrzymamy
+
+|===
+|Gatunek | Średnia ocen | Liczba ocen
+
+|Horror
+|3.274
+|110692
+
+|Children
+|3.405
+|125982
+
+|Comedy
+|3.419
+|562206
+|===
+
+image::https://github.com/alexandder/nosql-egz/images/aggr3py.png[]
+
+image::https://github.com/alexandder/nosql-egz/images/aggr3.png[]
+
+Ostatnie pytanie na które odpowiemy jest w których latach filmy z gatunku Horror otrzymały najwięcej ocen.
+Odpowiedź na to pytanie daje skrypt
+
+[source]
+db.tMovies.aggregate([
+  { $unwind : "$genres"},
+  { $match : {genres : "Horror"}},
+  { $group: {_id: "$year", numberOfRatings: {$sum : 1}, genres : {$first : "$genres"}}},
+  { $sort : {numberOfRatings : -1}},
+  { $limit : 5}
+]).pretty()
+
+lub https://github.com/alexandder/nosql-egz/blob/master/aggregations/aggregation4.py/[skrypt] w Pythonie.
+
+Odpowiedź:
+|===
+|Rok | Liczba ocen | Gatunek
+
+|1999
+|10010
+|Horror
+
+|2000
+|5112
+|Horror
+
+|1991
+|5058
+|Horror
+
+|2002
+|5112
+|Horror
+
+|1986
+|4292
+|Horror
+|===
+
+image::https://github.com/alexandder/nosql-egz/images/aggr4.png[]
+
+image::https://github.com/alexandder/nosql-egz/images/aggr4py.png[]
