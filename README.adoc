@@ -4,14 +4,17 @@ Aleksander Bolt <aleksanderbolt@yahoo.com>
 
 Użyty został następujący sprzęt i technologie
 
-:===
-Procesor,Intel(R) Core(TM) i5-2430M CPU @ 2.40GHz
+[format="csv"]
+|===
+Procesor, Intel(R) Core(TM) i5-2430M CPU @ 2.40GHz
 Pamięc RAM, 8GB
 Dysk, SSD
 System operacyjny, Linux 3.13.0-24-generic Mint 17 Qiana
 MongoDB, 3.0.7
 Python, 2.7.7
-:===
+PyMongo, 3.1.1
+http://csvkit.readthedocs.org/en/0.9.1/scripts/csvjoin.html[csvjoin], 0.9.1
+|===
 
 Poddałem analizie zbiór http://files.grouplens.org/datasets/movielens/ml-latest.zip[ocen filmów] liczący 1500000 rekordów.
 
@@ -35,10 +38,10 @@ Importujemy do MongoDB pobrany plik subreddit.bson, poleceniem:
 [source]
 time mongoimport -d nosql -c movies --type csv --file random.csv --headerline
 
-image::https://github.com/alexandder/nosql-egz/images/importStart.png[]
+image::https://github.com/alexandder/nosql-egz/tree/master/images/importStart.png[]
 
 
-image::https://github.com/alexandder/nosql-egz/images/importEnd.png[]
+image::https://github.com/alexandder/nosql-egz/tree/master/images/importEnd.png[]
 
 Czas importu wynosi 58,78 sekund.
 
@@ -113,7 +116,7 @@ W wyniku jego otrzymujemy odpowiedź
 |1237
 |===
 
-image::https://github.com/alexandder/nosql-egz/images/aggr1.png[]
+image::https://github.com/alexandder/nosql-egz/tree/master/images/aggr1.png[]
 
 Na to samo pytanie możemy odpowiedzieć używając języka Python i biblioteki PyMongo:
 
@@ -135,7 +138,7 @@ bestRatings = db.tMovies.aggregate([
 for r in list(bestRatings):
     print(r)
 
-image::https://github.com/alexandder/nosql-egz/images/aggr1py.png[]
+image::https://github.com/alexandder/nosql-egz/tree/master/images/aggr1py.png[]
 
 Następnym pytaniem na które odpowiemy to filmy z jakiego gatunku były najrzadziej oceniane. Dodatkowo w szukaniu uwzgędnimy tylko filmy wydane w latach 2000-2002. Realizuje to zapytanie
 
@@ -171,9 +174,9 @@ W wyniku jego otrzymujemy
 |2606
 |===
 
-image::https://github.com/alexandder/nosql-egz/images/aggr2.png[]
+image::https://github.com/alexandder/nosql-egz/tree/master/images/aggr2.png[]
 
-image::https://github.com/alexandder/nosql-egz/images/aggr2py.png[]
+image::https://github.com/alexandder/nosql-egz/tree/master/images/aggr2py.png[]
 
 Następnie zapytamy, który gatunek filmowy posiada najniższą średnią ocen, spośród tych, które mają conajmniej 10000 ocen.
 Realizuje to skrypt w Pythonie:
@@ -218,9 +221,9 @@ W wyniku jego otrzymamy
 |562206
 |===
 
-image::https://github.com/alexandder/nosql-egz/images/aggr3py.png[]
+image::https://github.com/alexandder/nosql-egz/tree/master/images/aggr3py.png[]
 
-image::https://github.com/alexandder/nosql-egz/images/aggr3.png[]
+image::https://github.com/alexandder/nosql-egz/tree/master/images/aggr3.png[]
 
 Ostatnie pytanie na które odpowiemy jest w których latach filmy z gatunku Horror otrzymały najwięcej ocen.
 Odpowiedź na to pytanie daje skrypt
@@ -261,6 +264,6 @@ Odpowiedź:
 |Horror
 |===
 
-image::https://github.com/alexandder/nosql-egz/images/aggr4.png[]
+image::https://github.com/alexandder/nosql-egz/tree/master/images/aggr4.png[]
 
-image::https://github.com/alexandder/nosql-egz/images/aggr4py.png[]
+image::https://github.com/alexandder/nosql-egz/tree/master/images/aggr4py.png[]
